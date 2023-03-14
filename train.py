@@ -1,51 +1,94 @@
-import random
+import logging
+from pathlib import Path
 
-import matplotlib.pyplot as plt
-import numpy as np
 import torch
 import torch.nn.functional as F
-from torchvision import datasets, transforms
+import torchvision
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.utils.data import DataLoader
+from torchinfo import summary
+from torchvision import transforms
+from tqdm import tqdm
 
-from utils.datasets import ESR
-from utils.vae_cnn import VAE
+from utils import config
+from utils.models.vae import Complex_VAE, EEG_Dataset, Res_VAE
 
-batch_size = 20
-learning_rate = 1e-3
-num_epochs = 10
+path_log = Path('./output_data')
+path_log.mkdir(exist_ok=True)
+path_mnist_dataset = Path('D:')
+path_models = Path('./models')
+path_models.mkdir(exist_ok=True)
+
+# 可以配置日志输出文件，编码形式，打印级别，日志文件记录方式
+logging.basicConfig(filename=path_log / 'training.log',
+                    format='%(asctime)s %(levelname)s %(message)s',
+                    datefmt='%H:%M:%S',
+                    encoding='utf-8',
+                    level=logging.DEBUG,
+                    filemode=config['log_file_mode'])
+# 也可以通过在命令行传入参数--log=INFO
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-dataset = ESR('D:')
-# dataset = datasets.MNIST('D:', train=True, download=True,
-#                     transform=transforms.ToTensor())
+learning_rate = config['learning_rate']
+start_epoch = config['start_epoch']
+num_epochs = config['num_epochs']
+batch_size = config['batch_size']
 
-train_loader = torch.utils.data.DataLoader(
-    dataset=dataset,
-    batch_size=batch_size, shuffle=True)
-test_loader = torch.utils.data.DataLoader(
-    dataset,
-    batch_size=1)
+if config['dataset'] == 'eeg':
+    dataloader = DataLoader(EEG_Dataset(root='EEG'), batch_size=batch_size, shuffle=True)
+elif config['dataset'] == 'mnist':
+    dataset = torchvision.datasets.MNIST(root=path_mnist_dataset,
+                                        train=True,
+                                        transform=transforms.ToTensor(),
+                                        download=True)
+    dataloader = torch.utils.data.DataLoader(dataset=dataset,
+                                            batch_size=batch_size, 
+                                            shuffle=True)
 
+if config['model'] == 'vae':
+    model = Complex_VAE().to(device)
+elif config['model'] == 'resnet':
+    model = Res_VAE(batch_size).to(device)
 
-net = VAE().to(device)
-optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
+if start_epoch != 1:
+    model.load_state_dict(torch.load(f'./models/{start_epoch - 1}.ckpt'))
 
+# summary(model, (batch_size, 1, 40*64))
 
-for epoch in range(num_epochs):
-    for x, y in train_loader:
+optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+if config['use_lr_scheduler']:
+    scheduler = ReduceLROnPlateau(optimizer, 'min', verbose=True, patience=config['patience'])
+
+for epoch in range(start_epoch, start_epoch + num_epochs):
+    i = 1
+    for data in tqdm(dataloader):
         
-        x = x.to(device)
-
-        # Feeding a batch of images into the network to obtain the output image, mu, and logVar
-        out, mu, logVar = net(x)
-
-        # The loss is the BCE loss combined with the KL divergence to ensure the distribution is learnt
-        kl_divergence = 0.5 * torch.sum(-1 - logVar + mu.pow(2) + logVar.exp())
-        loss = F.binary_cross_entropy(out, x, reduction='mean') + kl_divergence
-        print(loss.item())
-        # Backpropagation based on the loss
+        if config['dataset'] == 'eeg':
+            patien_id, x = data
+        elif config['dataset'] == 'mnist':
+            x = data[0].view(batch_size, 1, -1)
+        
+        x = x.float().to(device)
+        x_r, mu, var = model(x)
+        
+        # loss_r = F.binary_cross_entropy(x_r, x, reduction='sum')
+        loss_r = torch.nn.MSELoss(reduction='sum')(x_r, x)
+        
+        kl_div = -5e-4 * torch.mean(1 + var - mu.pow(2) - var.exp())
+        
+        loss = torch.mean(kl_div + loss_r)
+        
         optimizer.zero_grad()
-        loss.backward()
+        if config['loss'] == 'r+d':
+            loss.backward()
+        elif config['loss'] == 'r':
+            loss_r.backward()
         optimizer.step()
-
-    print('Epoch {}: Loss {}'.format(epoch, loss))
+        if config['use_lr_scheduler']:
+            scheduler.step(loss)
+        if i % 10 == 0:
+            logging.info(f"Epoch[{epoch}/{num_epochs}], Step [{i}/{len(dataloader)}], Reconst Loss: {loss_r.item():.4f}, KL Div: {kl_div.item():.4f}")
+        i += 1
+    
+    torch.save(model.state_dict(), path_models / f'{epoch}.ckpt')

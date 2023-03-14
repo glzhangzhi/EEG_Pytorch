@@ -34,7 +34,7 @@ class ESR(Dataset):
     
     def __init__(self, root):
         super(ESR, self).__init__()
-        path = Path(root) / 'Epileptic_Seizure_Recognition' / 'Epileptic_Seizure_Recognition.csv'
+        path = Path(root) / 'Epileptic_Seizure_Recognition/Epileptic_Seizure_Recognition.csv'
         data = pd.read_csv(path)
         data = data.to_numpy()[:, 1:]
         self.X = data[:, :-1]
@@ -48,6 +48,9 @@ class ESR(Dataset):
         x = np.pad(x, (0, 18), 'constant', constant_values=(0))
         x = x.reshape(14, -1)
         x = np.pad(x, ((7, 7), (7, 7)), 'constant', constant_values=0)
+        x_max = x.max()
+        x_min = x.min()
+        x = (x - x_min) / (x_max - x_min)
         x = np.expand_dims(x, axis=0)
         y = self.Y[index]
         return x, y
