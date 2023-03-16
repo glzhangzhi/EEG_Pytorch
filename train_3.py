@@ -9,17 +9,18 @@ from torchvision import datasets, transforms
 from tqdm import trange
 
 from utils.datasets import ESR
-from utils.vae_cnn import VAE
+from utils.vae_fn_2 import VAE
 
 logging.basicConfig(filename='training.log',
+                    datefmt='%H:%M:%S',
                     format='%(asctime)s %(message)s',
                     encoding='utf-8',
                     level=logging.DEBUG,
                     filemode='a')
 
-batch_size = 128
+batch_size = 512
 learning_rate = 1e-3
-num_epochs = 10
+num_epochs = 50
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -32,7 +33,7 @@ test_loader = torch.utils.data.DataLoader(
     dataset,
     batch_size=1)
 
-model = VAE(256).to(device)
+model = VAE().to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
 for epoch in trange(num_epochs):
@@ -55,6 +56,4 @@ for epoch in trange(num_epochs):
 
     logging.debug(f'Epoch {epoch}: Loss_R {loss_r:.3f} Loss_K {kl_divergence:.3f} Loss {loss:.3f}')
     
-    if epoch % 5 == 0:
-        # TODO 计算一次H值
-        torch.save(model.state_dict(), f'ckp_cnn_vae_1/{epoch}.ckpt')
+    torch.save(model.state_dict(), f'ckp_vae_fn_2/{epoch}.ckpt')

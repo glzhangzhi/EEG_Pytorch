@@ -44,19 +44,33 @@ class ESR(Dataset):
         return self.Y.shape[0]
     
     def __getitem__(self, index):
+        
+        # convert x type to float32
         x = self.X[index].astype(np.float32)
+        
+        # add some 0 at the end of vector and convert it to 14 x 14
         x = np.pad(x, (0, 18), 'constant', constant_values=(0))
         x = x.reshape(14, -1)
-        x = np.pad(x, ((7, 7), (7, 7)), 'constant', constant_values=0)
+        
+        # # use 0 to padding to 28 x 28
+        # x = np.pad(x, ((7, 7), (7, 7)), 'constant', constant_values=0)
+        
+        # TODO 尝试不同的normalization方法（均值方差）
+        # normalization
         x_max = x.max()
         x_min = x.min()
         x = (x - x_min) / (x_max - x_min)
+        
+        # convert its shape to 1 x 28 x 28
         x = np.expand_dims(x, axis=0)
+        
+        # get y
         y = self.Y[index]
+        
         return x, y
     
     def get_x_shape(self):
-        return (1, 1, 178)
+        return (1, 14, 14)
     
     def get_y_shape(self):
         return (1)
