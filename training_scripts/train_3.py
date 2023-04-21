@@ -29,9 +29,6 @@ dataset = ESR('D:')
 train_loader = torch.utils.data.DataLoader(
     dataset,
     batch_size=batch_size, shuffle=True)
-test_loader = torch.utils.data.DataLoader(
-    dataset,
-    batch_size=1)
 
 model = VAE().to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
