@@ -1,9 +1,16 @@
 import pickle
 from pathlib import Path
+from typing import Tuple
 
 import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset
+
+from utils.signals import (
+    generate_cos_signal,
+    generate_pulse_signal,
+    generate_sin_signal,
+)
 
 
 class EEG_Dataset(Dataset):
@@ -68,9 +75,34 @@ class ESR(Dataset):
         y = self.Y[index]
         
         return x, y
-    
-    def get_x_shape(self):
-        return (1, 14, 14)
-    
-    def get_y_shape(self):
-        return (1)
+
+class Single(Dataset):
+    def __init__(self):
+        
+        amplitude: float = 1
+        frequency: float = 0.5
+        phase: float = 0
+        duration: float = 5
+        sampling_rate: float = 178 / duration
+
+        self.X = None
+        
+        for _ in range(1000):
+            _, signal = generate_sin_signal(amplitude, frequency, np.random.random()*10, duration, sampling_rate, noise=True)
+            if self.X is None:
+                self.X = signal
+            else:
+                self.X = np.vstack([self.X, signal])
+        
+        self.X = np.expand_dims(self.X, axis=1)
+        
+        x_max: float = self.X.max()
+        x_min: float = self.X.min()
+        
+        self.X = (self.X - x_min) / (x_max - x_min)
+        
+    def __len__(self) -> int:
+        return self.X.shape[0]
+
+    def __getitem__(self, index: int) -> np.ndarray:        
+        return self.X[index].astype(np.float32)
