@@ -71,7 +71,7 @@ class VAE(nn.Module):
         # 32 x 170
         x = F.relu(self.decConv1(x))
         # 16 x 174
-        x = torch.sigmoid(self.decConv2(x))
+        x = torch.tanh(self.decConv2(x))
         # 1 x 178
         return x
 
