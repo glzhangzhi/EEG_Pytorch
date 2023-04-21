@@ -39,40 +39,33 @@ class EEG_Dataset(Dataset):
 
 class ESR(Dataset):
     
-    def __init__(self, root):
+    def __init__(self) -> None:
         super(ESR, self).__init__()
-        path = Path(root) / 'Epileptic_Seizure_Recognition/Epileptic_Seizure_Recognition.csv'
+        path = 'D:/Epileptic_Seizure_Recognition/Epileptic_Seizure_Recognition.csv'
         data = pd.read_csv(path)
         data = data.to_numpy()[:, 1:]
         self.X = data[:, :-1]
         self.Y = data[:, -1]
+        
+        # TODO 尝试不同的normalization方法（均值方差）
+        x_max: float = self.X.max()
+        x_min: float = self.X.min()
+        
+        self.X = (self.X - x_min) / (x_max - x_min)
     
-    def __len__(self):
+    def __len__(self) -> int:
         return self.Y.shape[0]
     
-    def __getitem__(self, index):
+    def __getitem__(self, index: int) -> Tuple[np.ndarray, int]:
         
         # convert x type to float32
         x = self.X[index].astype(np.float32)
-        
-        # add some 0 at the end of vector and convert it to 14 x 14
-        x = np.pad(x, (0, 18), 'constant', constant_values=(0))
-        x = x.reshape(14, -1)
-        
-        # # use 0 to padding to 28 x 28
-        # x = np.pad(x, ((7, 7), (7, 7)), 'constant', constant_values=0)
-        
-        # TODO 尝试不同的normalization方法（均值方差）
-        # normalization
-        x_max = x.max()
-        x_min = x.min()
-        x = (x - x_min) / (x_max - x_min)
         
         # convert its shape to 1 x 28 x 28
         x = np.expand_dims(x, axis=0)
         
         # get y
-        y = self.Y[index]
+        y: int = self.Y[index]
         
         return x, y
 
